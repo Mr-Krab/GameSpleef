@@ -10,8 +10,8 @@ import cloud.zeroprox.gamespleef.game.GameManager;
 import cloud.zeroprox.gamespleef.game.IGame;
 import cloud.zeroprox.gamespleef.utils.AABBSerialize;
 import cloud.zeroprox.gamespleef.utils.GameSerialize;
+import cloud.zeroprox.gamespleef.utils.Locale;
 import cloud.zeroprox.gamespleef.utils.TransformWorldSerializer;
-import com.google.common.collect.Maps;
 import com.google.common.reflect.TypeToken;
 import com.google.inject.Inject;
 import ninja.leaping.configurate.ConfigurationNode;
@@ -22,9 +22,11 @@ import ninja.leaping.configurate.objectmapping.ObjectMappingException;
 import ninja.leaping.configurate.objectmapping.serialize.TypeSerializers;
 import org.slf4j.Logger;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.asset.Asset;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.*;
 import org.spongepowered.api.command.spec.CommandSpec;
+import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.config.DefaultConfig;
 import org.spongepowered.api.entity.Transform;
 import org.spongepowered.api.event.Listener;
@@ -32,11 +34,16 @@ import org.spongepowered.api.event.game.GameReloadEvent;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
 import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.channel.MessageChannel;
+import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.AABB;
 import org.spongepowered.api.world.World;
 
 import javax.annotation.Nullable;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,17 +57,33 @@ public class GameSpleef {
     private Logger logger;
     private static GameSpleef instance;
     private static GameManager gameManager;
+    public static Locale loc;
 
     @Inject
-    @DefaultConfig(sharedRoot = true)
-    private Path defaultConfig;
-
-    @Inject
-    @DefaultConfig(sharedRoot = true)
+    @DefaultConfig(sharedRoot = false)
     private ConfigurationLoader<CommentedConfigurationNode> configManager;
 
-    private ConfigurationNode rootNode;
+    @Inject
+    @DefaultConfig(sharedRoot = false)
+    private Path defaultConfig;
+    @Inject
+    @ConfigDir(sharedRoot = false)
+    private Path configDir;
+    Path config;
+    
+    @Inject
+    @ConfigDir(sharedRoot = false)
+    public File configFile;
 
+    private ConfigurationNode rootNode;
+	
+	public MessageChannel consoleMessage(){
+		return MessageChannel.TO_CONSOLE;
+	}
+	
+	public String deserializer(String string) {
+		return TextSerializers.formattingCode('§').serialize(TextSerializers.FORMATTING_CODE.deserialize(string));
+	}
 
     CommandSpec joinCmd = CommandSpec.builder()
             .description(Text.of("Join a game"))
@@ -68,14 +91,14 @@ public class GameSpleef {
                     GenericArguments.optional(new GameArgument(Text.of("game")))
             )
             .permission("gamespleef.join")
-            .executor(new JoinCmd())
+            .executor(new JoinCmd(this))
             .build();
 
     CommandSpec leaveCmd = CommandSpec.builder()
             .description(Text.of("Leave game"))
             .arguments(GenericArguments.flags().flag("f").buildWith(GenericArguments.none()))
             .permission("gamespleef.leave")
-            .executor(new LeaveCmd())
+            .executor(new LeaveCmd(this))
             .build();
 
     CommandSpec adminBuildCmd = CommandSpec.builder()
@@ -84,7 +107,7 @@ public class GameSpleef {
                     GenericArguments.optional(GenericArguments.enumValue(Text.of("type"), AdminBuildTypes.class)),
                     GenericArguments.optional(GenericArguments.string(Text.of("name")))
             )
-            .executor(new BuildCmd())
+            .executor(new BuildCmd(this))
             .build();
 
     CommandSpec adminToggleCmd = CommandSpec.builder()
@@ -92,7 +115,7 @@ public class GameSpleef {
             .arguments(
                     GenericArguments.optional(new GameArgument(Text.of("game")))
             )
-            .executor(new DisableCmd())
+            .executor(new DisableCmd(this))
             .build();
 
     CommandSpec adminRemoveCmd = CommandSpec.builder()
@@ -100,19 +123,19 @@ public class GameSpleef {
             .arguments(
                     GenericArguments.optional(new GameArgument(Text.of("game")))
             )
-            .executor(new RemoveCmd())
+            .executor(new RemoveCmd(this))
             .build();
 
     CommandSpec adminKickCmd = CommandSpec.builder()
             .description(Text.of("Kick player"))
             .arguments(GenericArguments.onlyOne(GenericArguments.player(Text.of("player"))))
-            .executor(new KickCmd())
+            .executor(new KickCmd(this))
             .build();
 
     CommandSpec adminCmd = CommandSpec.builder()
             .description(Text.of("Area management"))
             .permission("gamespleef.admin")
-            .executor(new AdminCmd())
+            .executor(new AdminCmd(this))
             .child(adminBuildCmd, "build")
             .child(adminToggleCmd, "toggle")
             .child(adminRemoveCmd, "remove")
@@ -121,7 +144,7 @@ public class GameSpleef {
 
     CommandSpec listCmd = CommandSpec.builder()
             .description(Text.of("Show game list"))
-            .executor(new ListCmd())
+            .executor(new ListCmd(this))
             .permission("gamespleef.join")
             .build();
 
@@ -131,7 +154,7 @@ public class GameSpleef {
             .child(leaveCmd, "leave")
             .child(listCmd, "list")
             .child(adminCmd, "admin")
-            .executor(new HelpCmd())
+            .executor(new HelpCmd(this))
             .build();
     
     
@@ -141,10 +164,11 @@ public class GameSpleef {
         Sponge.getEventManager().registerListeners(this, new Listeners());
         TypeToken<Transform<World>> transformTypeToken = new TypeToken<Transform<World>>() {};
         TypeSerializers.getDefaultSerializers().registerType(transformTypeToken, new TransformWorldSerializer());
-
         gameManager = new GameManager();
         instance = this;
-        configManager = HoconConfigurationLoader.builder().setPath(defaultConfig).build();
+        config = configDir.resolve("config.conf");
+        configManager = HoconConfigurationLoader.builder().setPath(config).build();
+        saveConfig();
         try {
             rootNode = configManager.load();
             loadConfig();
@@ -152,7 +176,65 @@ public class GameSpleef {
         } catch (ObjectMappingException e) {
             e.printStackTrace();
         }
+        checkConfigVersion();
+        loc = new Locale(this, String.valueOf(rootNode.getNode("Lang").getValue()));
+		try {
+			loc.init();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		checkLocaleVersion();
     }
+	
+	public void checkConfigVersion() {
+		Asset asset = Sponge.getAssetManager().getAsset(this, "config.conf").get();
+		File newFile = new File(configDir + File.separator + "ConfigOld.txt");
+		if (!rootNode.getNode("ConfigVersion").isVirtual()) {
+			if ((Integer) rootNode.getNode("ConfigVersion").getValue(Integer.class) != 1) {
+				consoleMessage().send(TextSerializers.FORMATTING_CODE.deserialize("&eAttention!!! The version of your configuration file does not match the current one!"));
+				config.toFile().renameTo(newFile);
+				consoleMessage().send(TextSerializers.FORMATTING_CODE.deserialize("&aYour config has been replaced with the default config. Old config see in the file ConfigOld.txt."));
+				try {
+					asset.copyToFile(config);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		} else {
+			consoleMessage().send(TextSerializers.FORMATTING_CODE.deserialize("&eAttention!!! The version of your configuration file does not match the current one!"));
+			config.toFile().renameTo(newFile);
+			consoleMessage().send(TextSerializers.FORMATTING_CODE.deserialize("&aYour config has been replaced with the default config. Old config see in the file ConfigOld.txt."));
+			try {
+				asset.copyToFile(config);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+        try {
+            loadConfig();
+        } catch(IOException e) {
+        } catch (ObjectMappingException e) {
+            e.printStackTrace();
+        }
+	}
+	
+	public void checkLocaleVersion() {
+		String current = "1";
+		if (!loc.getString("locale.version").trim().equals(current)) {
+			consoleMessage().send(TextSerializers.FORMATTING_CODE.deserialize(loc.getString("locale.version.old")));
+		}
+	}
+	
+	public void saveConfig() {
+		Asset asset = Sponge.getAssetManager().getAsset(this, "config.conf").get();
+		if (Files.notExists(config)) {
+			try {
+				asset.copyToFile(config);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 
     public static GameSpleef getInstance() {
         return instance;
@@ -170,6 +252,11 @@ public class GameSpleef {
         } catch (IOException e) {
         } catch (ObjectMappingException e) {
         }
+		try {
+			loc.init();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
     }
 
     private void loadConfig() throws IOException, ObjectMappingException {

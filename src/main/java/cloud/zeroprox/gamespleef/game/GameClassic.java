@@ -18,6 +18,7 @@ import org.spongepowered.api.item.inventory.entity.PlayerInventory;
 import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.util.AABB;
 import org.spongepowered.api.world.BlockChangeFlags;
 import org.spongepowered.api.world.Location;
@@ -28,6 +29,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class GameClassic implements IGame {
+	
+	GameSpleef plugin;
+	
+	public GameClassic(GameSpleef plugin) {
+		this.plugin = plugin;
+	}
 
     private String name;
     private GameSpleef.Mode mode;
@@ -124,22 +131,23 @@ public class GameClassic implements IGame {
 
     }
 
-    @Override
+    @SuppressWarnings("static-access")
+	@Override
     public void addPlayer(Player player) {
         if (this.activePlayers.size() >= this.limit) {
-            player.sendMessage(Text.of(TextColors.RED, "You can't join, the game is at a limit."));
+            player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.join.1")));
             return;
         }
         if (this.mode == GameSpleef.Mode.DISABLED) {
-            player.sendMessage(Text.of(TextColors.RED, "You can't join the game is not ready."));
+            player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.join.2")));
             return;
         }
         if (this.mode == GameSpleef.Mode.PLAYING) {
-            player.sendMessage(Text.of(TextColors.RED, "You can't join the game is already started."));
+            player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.join.3")));
             return;
         }
         if (this.saveInventories == false && player.getInventory().totalItems() != 0) {
-            player.sendMessage(Text.of(TextColors.RED, "You need a empty inventory to join."));
+            player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.join.4")));
             return;
         }
         player.health().set(20D);
@@ -151,7 +159,7 @@ public class GameClassic implements IGame {
         player.offer(Keys.POTION_EFFECTS, Arrays.asList(
                 PotionEffect.builder().amplifier(5).duration(20 * 60 * 60 * 60).particles(false).potionType(PotionEffectTypes.RESISTANCE).build(),
                 PotionEffect.builder().amplifier(1).duration(20 * 60 * 60 * 60).particles(false).potionType(PotionEffectTypes.SATURATION).build()));
-        player.sendMessage(Text.of(TextColors.GREEN, "You have joined the game"));
+        player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.join.5")));
 
         if (this.saveInventories) {
             List<Optional<ItemStack>> items = new ArrayList<>();
@@ -251,7 +259,8 @@ public class GameClassic implements IGame {
         }
     }
 
-    @Override
+    @SuppressWarnings("static-access")
+	@Override
     public void killPlayer(Player player) {
         for (BlockSnapshot bs : this.brokenBlocks.keySet()) {
             if (bs.getLocation().isPresent()) {
@@ -261,7 +270,7 @@ public class GameClassic implements IGame {
                     Player killer = Sponge.getServer().getPlayer(this.brokenBlocks.get(bs)).get();
                     getPlayerStats(killer).get().addKnockout(player);
                     player.sendMessage(
-                            Text.of(TextColors.GRAY, "[", TextColors.RED, "SPLEEF", TextColors.GRAY, "] You have been knocked out by ", TextColors.RED, killer.getName(), TextColors.GRAY, ".")
+                    		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("plugin-prefix") + plugin.loc.getString("game.knock-out.1").replace("%killer%", killer.getName()))
                     );
                 }
             }
@@ -277,7 +286,7 @@ public class GameClassic implements IGame {
         player.setTransform(this.getLobby());
         if (this.activePlayers.size() <= 1) {
             Sponge.getServer().getBroadcastChannel().send(
-                    Text.of(TextColors.GRAY, "[", TextColors.GOLD, "SPLEEF", TextColors.GRAY, "] ", TextColors.GOLD, Sponge.getServer().getPlayer(this.activePlayers.keySet().iterator().next()).get().getName(), " won spleef on arena ", this.name)
+            		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("plugin-prefix") + plugin.loc.getString("game.win").replace("%player%", Sponge.getServer().getPlayer(this.activePlayers.keySet().iterator().next()).get().getName()).replace("%arena%", this.name))
             );
             resetGame();
         }
@@ -288,7 +297,8 @@ public class GameClassic implements IGame {
         }
     }
 
-    @Override
+    @SuppressWarnings("static-access")
+	@Override
     public void resetGame() {
         if (this.mode == GameSpleef.Mode.PLAYING) {
             for (UUID playerUid : this.activePlayers.keySet()) {
@@ -316,7 +326,7 @@ public class GameClassic implements IGame {
             for (UUID playerUid : this.inactivePlayers.keySet()) {
                 double k = this.inactivePlayers.get(playerUid).getKnockouts().size();
                 Sponge.getServer().getPlayer(playerUid).get().sendMessage(
-                        Text.of(TextColors.GRAY, "[", TextColors.RED, "SPLEEF", TextColors.GRAY, "] You knocked out ", TextColors.RED, (int) k, TextColors.GRAY, " (", (int)(k/(this.inactivePlayers.size()-1) * 100.0), "%) players")
+                		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("plugin-prefix") + plugin.loc.getString("game.knock-out.2").replace("%players%", String.valueOf((int) k)).replace("", String.valueOf((int)(k/(this.inactivePlayers.size()-1) * 100.0))))
                 );
                 if (k > max_kills) {
                     max_kills = k;
@@ -333,7 +343,7 @@ public class GameClassic implements IGame {
             for (UUID playerUid : this.inactivePlayers.keySet()) {
                 double i = this.inactivePlayers.get(playerUid).getBlocksBroken();
                 Sponge.getServer().getPlayer(playerUid).get().sendMessage(
-                        Text.of(TextColors.GRAY, "[", TextColors.RED, "SPLEEF", TextColors.GRAY, "] You broke ", TextColors.RED, (int) i, TextColors.GRAY, " blocks (", (int)(i/totalBlocks * 100.0), "%)")
+                		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("plugin-prefix") + plugin.loc.getString("game.broke.1").replace("%blocks%", String.valueOf((int) i)).replace("%percent%", String.valueOf((int)(i/totalBlocks * 100.0))))
                 );
                 if (i > max_breaks) {
                     max_breaks = i;
@@ -346,10 +356,10 @@ public class GameClassic implements IGame {
                         Text.of(TextColors.GRAY, "-------------------------------------------------")
                 );
                 Sponge.getServer().getPlayer(playerUid).get().sendMessage(
-                        Text.of(TextColors.GRAY, "Most knockouts by ", TextColors.RED, Sponge.getServer().getPlayer(max_kills_player).get().getName(), TextColors.GRAY, " (", (int)max_kills, ", ", (int)(max_kills/(this.inactivePlayers.size()-1)*100.0), "%)")
+                		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.knock-out.2").replace("%player%", Sponge.getServer().getPlayer(max_kills_player).get().getName()).replace("%max%", String.valueOf((int)max_kills)).replace("%percent%", String.valueOf((int)(max_kills/(this.inactivePlayers.size()-1)*100.0))))
                 );
                 Sponge.getServer().getPlayer(playerUid).get().sendMessage(
-                        Text.of(TextColors.GRAY, "Most blocks broke by ", TextColors.RED, Sponge.getServer().getPlayer(max_breaks_player).get().getName(), TextColors.GRAY, " (", (int)max_breaks, ", ", (int)(max_breaks/totalBlocks*100.0), "%)")
+                		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.broke.2").replace("%player%", Sponge.getServer().getPlayer(max_breaks_player).get().getName()).replace("%max%", String.valueOf((int)max_breaks)).replace("%percent%", String.valueOf((int)(max_breaks/totalBlocks*100.0))))
                 );
                 Sponge.getServer().getPlayer(playerUid).get().sendMessage(
                         Text.of(TextColors.GRAY, "-------------------------------------------------")
@@ -381,7 +391,8 @@ public class GameClassic implements IGame {
 
         HashSet<UUID> temp = new HashSet<>();
 
-        @Override
+        @SuppressWarnings("static-access")
+		@Override
         public void accept(Task task) {
             UUID[] array;
 
@@ -396,14 +407,14 @@ public class GameClassic implements IGame {
                 if (!checkPlayerMoved(Sponge.getServer().getPlayer(playerUid))) {
                     temp.add(playerUid);
                     if (campWarnings.contains(playerUid)) {
-                        player.sendMessage(Text.of(TextColors.DARK_RED, "Kicked for camping!"));
+                        player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.camp.1")));
                         killPlayer(player);
                         if (activePlayers.size() <= 1) {
                             campWarnings.clear();
                             return;
                         }
                     } else {
-                        player.sendMessage(Text.of(TextColors.DARK_RED, "WARNING: ", TextColors.GOLD, "Possible camping detected! Move to keep from being kicked!"));
+                        player.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("game.camp.2")));
                     }
                 }
             }
@@ -416,13 +427,14 @@ public class GameClassic implements IGame {
 
         private int seconds = 16;
 
-        @Override
+        @SuppressWarnings("static-access")
+		@Override
         public void accept(Task task) {
             seconds--;
             if (seconds % 5 == 0 || seconds < 6) {
                 for (UUID playerUid : activePlayers.keySet()) {
                     Sponge.getServer().getPlayer(playerUid).ifPresent(player -> player.sendMessage(
-                            Text.of(TextColors.GRAY, "[", TextColors.RED, "SPLEEF", TextColors.GRAY, "] Game starting in ", TextColors.RED, seconds, TextColors.GRAY, " seconds.")
+                    		TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("plugin-prefix") + plugin.loc.getString("game.camp.2").replace("%time%", String.valueOf(seconds)))
                     ));
                 }
             }

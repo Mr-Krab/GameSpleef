@@ -9,16 +9,23 @@ import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.spec.CommandExecutor;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.text.Text;
-import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.serializer.TextSerializers;
 
 import java.util.Optional;
 
 public class JoinCmd implements CommandExecutor {
+	
+	GameSpleef plugin;
+	
+	public JoinCmd(GameSpleef plugin) {
+		this.plugin = plugin;
+	}
 
-    @Override
+    @SuppressWarnings("static-access")
+	@Override
     public CommandResult execute(CommandSource src, CommandContext args) throws CommandException {
         if (!(src instanceof Player)) {
-            throw new CommandException(Text.of(TextColors.RED, "You need to be a player to join a game"));
+            throw new CommandException(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.only-player")));
         }
         Player player = (Player) src;
 
@@ -29,7 +36,7 @@ public class JoinCmd implements CommandExecutor {
         String gameName = args.<String>getOne(Text.of("game")).orElse(GameSpleef.getGameManager().getDefaultName());
         Optional<IGame> game = GameSpleef.getGameManager().getGame(gameName);
         if (!game.isPresent()) {
-            src.sendMessage(Text.of(TextColors.RED, "No game found for name ", gameName));
+            src.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.join.game-not-found").replace("%name%", gameName)));
             return CommandResult.empty();
         }
         game.get().addPlayer(player);

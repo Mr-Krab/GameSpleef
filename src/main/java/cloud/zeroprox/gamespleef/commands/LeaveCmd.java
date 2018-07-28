@@ -8,22 +8,29 @@ import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.spec.CommandExecutor;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.text.Text;
-import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.serializer.TextSerializers;
 
 import java.util.Optional;
 
 public class LeaveCmd implements CommandExecutor {
-    @Override
+	
+	GameSpleef plugin;
+	
+	public LeaveCmd(GameSpleef plugin) {
+		this.plugin = plugin;
+	}
+	
+    @SuppressWarnings("static-access")
+	@Override
     public CommandResult execute(CommandSource src, CommandContext args) throws CommandException {
         if (!(src instanceof Player)) {
-            throw new CommandException(Text.of(TextColors.RED, "You need to be a player to join a game"));
+            throw new CommandException(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.only-player")));
         }
         Player player = (Player) src;
 
         Optional<IGame> game = GameSpleef.getGameManager().getPlayerGame(player);
         if (!game.isPresent()) {
-            throw new CommandException(Text.of(TextColors.RED, "You are not in a game"));
+            throw new CommandException(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.leave.not-in-a-game")));
         }
 
         game.get().leavePlayer(player, args.hasAny("f"));

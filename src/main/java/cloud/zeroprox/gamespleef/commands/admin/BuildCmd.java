@@ -13,6 +13,7 @@ import org.spongepowered.api.service.pagination.PaginationList;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.serializer.TextSerializers;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,13 +21,19 @@ import java.util.Optional;
 import java.util.Random;
 
 public class BuildCmd implements CommandExecutor {
-
+	
+	GameSpleef plugin;
     GameSerialize gameSerialize;
+	
+	public BuildCmd(GameSpleef plugin) {
+		this.plugin = plugin;
+	}
 
-    @Override
+    @SuppressWarnings("static-access")
+	@Override
     public CommandResult execute(CommandSource src, CommandContext args) throws CommandException {
         if (!(src instanceof Player)) {
-            throw new CommandException(Text.of(TextColors.RED, "You need to be a player"));
+            throw new CommandException(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.build.only-player")));
         }
         Player player = (Player)src;
         Optional<GameSpleef.AdminBuildTypes> adminOptional = args.getOne(Text.of("type"));
@@ -46,7 +53,7 @@ public class BuildCmd implements CommandExecutor {
 
             GameSpleef.getInstance().addArena(gameSerialize);
 
-            src.sendMessage(Text.of("Saved"));
+            src.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.build.saved")));
             return CommandResult.success();
         }
         if (adminType.equals(GameSpleef.AdminBuildTypes.NAME)) {
@@ -65,7 +72,7 @@ public class BuildCmd implements CommandExecutor {
         }
         if (adminType.equals(GameSpleef.AdminBuildTypes.STOP)) {
             this.gameSerialize = null;
-            src.sendMessage(Text.of(TextColors.GREEN, "Setup stopped"));
+            src.sendMessage(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.build.stop")));
             return CommandResult.success();
         }
 
@@ -119,48 +126,50 @@ public class BuildCmd implements CommandExecutor {
         return CommandResult.empty();
     }
 
-    private void showProgress(CommandSource src) {
+    @SuppressWarnings("static-access")
+	private void showProgress(CommandSource src) {
         List<Text> textArray = new ArrayList<>();
         if (gameSerialize == null) {
-            textArray.add(Text.builder("No new builder start -click me- to start").onClick(TextActions.suggestCommand("/spleef admin build NAME <name>")).build());
+            textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.1"))).onClick(TextActions.suggestCommand("/spleef admin build NAME <name>")).build());
         } else {
-            textArray.add(Text.builder("Name: ").color(TextColors.GRAY).append(Text.builder(gameSerialize.name).color(TextColors.GREEN).build()).build());
-            textArray.add(Text.builder("Lobby: ").color(TextColors.GRAY).append(colorVariable(gameSerialize.lobby)).onClick(TextActions.runCommand("/spleef admin build LOBBY")).build());
-            textArray.add(Text.builder("Can join with items in inv: ").color(TextColors.GRAY).append(Text.of(TextColors.GREEN, gameSerialize.saveInv)).append(Text.of(" (disable this on modded)")).onClick(TextActions.runCommand("/spleef admin build SAVE_INV")).build());
-            textArray.add(Text.builder("Spawn: ").color(TextColors.GRAY).append(colorVariable(gameSerialize.spawn)).onClick(TextActions.runCommand("/spleef admin build SPAWN")).build());
+            textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.2"))).append(Text.builder(gameSerialize.name).color(TextColors.GREEN).build()).build());
+            textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.3"))).append(colorVariable(gameSerialize.lobby)).onClick(TextActions.runCommand("/spleef admin build LOBBY")).build());
+            textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.4"))).append(Text.of(TextColors.GREEN, gameSerialize.saveInv)).append(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.build.progress.5"))).onClick(TextActions.runCommand("/spleef admin build SAVE_INV")).build());
+            textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.6"))).append(colorVariable(gameSerialize.spawn)).onClick(TextActions.runCommand("/spleef admin build SPAWN")).build());
             if (gameSerialize.corner_area_1 != null && gameSerialize.corner_area_2 != null) {
-                textArray.add(Text.builder("Area: ").color(TextColors.GRAY).append(Text.builder("Okay").color(TextColors.GREEN).build()).build());
+                textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.7"))).append(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.13"))).build()).build());
             } else {
-                textArray.add(Text.builder("Area: ").color(TextColors.GRAY).append(colorVariable(gameSerialize.area)).build());
+                textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.7"))).append(colorVariable(gameSerialize.area)).build());
             }
-            textArray.add(Text.builder("   - CORNER_AREA_1").color((gameSerialize.corner_area_1 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_AREA_1")).build());
-            textArray.add(Text.builder("   - CORNER_AREA_2").color((gameSerialize.corner_area_2 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_AREA_2")).build());
-            textArray.add(Text.builder("Floors: ").color(TextColors.GRAY).append(colorVariable(gameSerialize.floors)).build());
-            textArray.add(Text.builder("   - CORNER_FLOOR_1").color((gameSerialize.corner_floor_1 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_FLOOR_1")).build());
-            textArray.add(Text.builder("   - CORNER_FLOOR_2").color((gameSerialize.corner_floor_2 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_FLOOR_2")).build());
+            textArray.add(Text.builder(plugin.loc.getString("commands.build.progress.8") + "1").color((gameSerialize.corner_area_1 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_AREA_1")).build());
+            textArray.add(Text.builder(plugin.loc.getString("commands.build.progress.8") + "2").color((gameSerialize.corner_area_2 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_AREA_2")).build());
+            textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.9"))).append(colorVariable(gameSerialize.floors)).build());
+            textArray.add(Text.builder(plugin.loc.getString("commands.build.progress.10") + "1").color((gameSerialize.corner_floor_1 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_FLOOR_1")).build());
+            textArray.add(Text.builder(plugin.loc.getString("commands.build.progress.10") + "2").color((gameSerialize.corner_floor_2 == null ? TextColors.RED : TextColors.AQUA)).onClick(TextActions.runCommand("/spleef admin build CORNER_FLOOR_2")).build());
             if (gameSerialize.corner_area_2 != null
                     && gameSerialize.corner_area_1 != null
                     && gameSerialize.floors.size() > 0
                     && gameSerialize.spawn != null
                     && gameSerialize.lobby != null) {
-                textArray.add(Text.builder("Save").color(TextColors.AQUA).onClick(TextActions.runCommand("/spleef admin build SAVE")).build());
+                textArray.add(Text.builder(plugin.deserializer(plugin.loc.getString("commands.build.progress.11"))).onClick(TextActions.runCommand("/spleef admin build SAVE")).build());
             }
         }
         PaginationList.builder()
-                .title(Text.of("New build arena"))
+                .title(TextSerializers.FORMATTING_CODE.deserialize(plugin.loc.getString("commands.build.title")))
                 .contents(textArray)
                 .build()
         .sendTo(src);
     }
 
-    private Text colorVariable(Object object) {
+    @SuppressWarnings("static-access")
+	private Text colorVariable(Object object) {
         if (object == null) {
             return Text.builder(" --").color(TextColors.GREEN).build();
         } else if (object instanceof List) {
             int amount = ((List)object).size();
-            return Text.builder(" Amount: " + amount).color((amount == 0 ? TextColors.RED: TextColors.GREEN)).build();
+            return Text.builder(plugin.loc.getString("commands.build.progress.12") + amount).color((amount == 0 ? TextColors.RED: TextColors.GREEN)).build();
         } else {
-            return Text.builder(" Okay").color(TextColors.GREEN).build();
+            return Text.builder(" " + plugin.deserializer(plugin.loc.getString("commands.build.progress.13"))).build();
         }
     }
 }
